@@ -1,0 +1,448 @@
+// Servicios Integrales — esquema de base de datos
+// PostgreSQL vía Prisma. Compatible con Neon, Railway, Vercel Postgres, RDS
+// o un Postgres administrado por Supabase (la app NO depende de Supabase).
+//
+// Reglas de negocio clave reflejadas en el modelo:
+//  - Los costos (USD) viven separados de los precios de venta (ARS).
+//  - El tipo de cambio y el IVA se guardan en `settings`, no en el código.
+//  - La financiación (payment_methods) nunca modifica el margen del producto:
+//    el costo financiero se calcula y se muestra aparte.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  SELLER
+  INSTALLER
+  CUSTOMER
+}
+
+enum CustomerType {
+  PARTICULAR
+  COMERCIO
+  EMPRESA
+}
+
+enum QuoteStatus {
+  BORRADOR
+  ENVIADO
+  ACEPTADO
+  RECHAZADO
+  VENCIDO
+  CANCELADO
+}
+
+enum WorkOrderStatus {
+  PENDIENTE
+  PROGRAMADA
+  EN_PREPARACION
+  EN_CAMINO
+  EN_INSTALACION
+  FINALIZADA
+  CANCELADA
+}
+
+enum LeadStatus {
+  NUEVO
+  CONTACTADO
+  PRESUPUESTADO
+  GANADO
+  PERDIDO
+}
+
+enum MaintenanceType {
+  PREVENTIVO
+  REPARACION
+  VISITA_TECNICA
+  AMPLIACION
+  CAMBIO_BATERIA
+}
+
+// ---------------------------------------------------------------------------
+// Configuración global (tipo de cambio, IVA, márgenes por defecto, etc.)
+// Clave/valor para poder agregar parámetros sin migraciones.
+// ---------------------------------------------------------------------------
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  label     String?
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ---------------------------------------------------------------------------
+// Usuarios y roles (preparado para Supabase Auth en el futuro)
+// ---------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      UserRole @default(SELLER)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  quotes Quote[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Clientes (CRM)
+// ---------------------------------------------------------------------------
+
+model Customer {
+  id        String       @id @default(cuid())
+  name      String
+  phone     String?
+  whatsapp  String?
+  email     String?
+  taxId     String? // DNI / CUIT (opcional)
+  address   String?
+  locality  String?
+  type      CustomerType @default(PARTICULAR)
+  notes     String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  quotes        Quote[]
+  workOrders    WorkOrder[]
+  installations Installation[]
+
+  @@map("customers")
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo de productos
+// ---------------------------------------------------------------------------
+
+model ProductCategory {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  order    Int       @default(0)
+  products Product[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id                String  @id @default(cuid())
+  name              String
+  brand             String?
+  model             String?
+  sku               String? @unique
+  description       String?
+  imageUrl          String?
+  // Costos (fuente de verdad): precio en USD sin IVA.
+  priceUsd          Decimal @db.Decimal(12, 2)
+  hasVat            Boolean @default(true)
+  // Margen objetivo por producto (si es null se usa el margen global).
+  marginPct         Decimal @db.Decimal(6, 2)
+  // Tiempo estimado de instalación en minutos.
+  installMinutes    Int     @default(0)
+  active            Boolean @default(true)
+
+  categoryId String
+  category   ProductCategory @relation(fields: [categoryId], references: [id])
+
+  packageItems   PackageItem[]
+  quoteItems     QuoteItem[]
+  workOrderItems WorkOrderItem[]
+
+  @@index([categoryId])
+  @@map("products")
+}
+
+// ---------------------------------------------------------------------------
+// Mano de obra / servicios de instalación
+// ---------------------------------------------------------------------------
+
+model Service {
+  id             String  @id @default(cuid())
+  name           String
+  slug           String  @unique
+  priceArs       Decimal @db.Decimal(12, 2)
+  estimatedMin   Int     @default(0)
+  active         Boolean @default(true)
+
+  quoteItems QuoteItem[]
+
+  @@map("services")
+}
+
+// ---------------------------------------------------------------------------
+// Paquetes / kits configurables (NO hardcodeados)
+// ---------------------------------------------------------------------------
+
+model Package {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  target      String? // Casa, Comercio, Departamento, etc.
+  active      Boolean @default(true)
+
+  items PackageItem[]
+
+  @@map("packages")
+}
+
+model PackageItem {
+  id        String @id @default(cuid())
+  packageId String
+  productId String
+  quantity  Int    @default(1)
+
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([packageId, productId])
+  @@map("package_items")
+}
+
+// ---------------------------------------------------------------------------
+// Métodos de pago / financiación (tasas configurables, nunca en código)
+// ---------------------------------------------------------------------------
+
+model PaymentMethod {
+  id             String  @id @default(cuid())
+  name           String
+  installments   Int     @default(1)
+  // Costo financiero total sobre el precio contado (ej: 0.25 = 25%).
+  financingCost  Decimal @db.Decimal(6, 4) @default(0)
+  // Anticipo requerido como fracción del total (ej: 0.30 = 30%).
+  downPaymentPct Decimal @db.Decimal(6, 4) @default(0)
+  active         Boolean @default(true)
+  order          Int     @default(0)
+
+  quotes Quote[]
+
+  @@map("payment_methods")
+}
+
+// ---------------------------------------------------------------------------
+// Presupuestos
+// ---------------------------------------------------------------------------
+
+model Quote {
+  id           String      @id @default(cuid())
+  code         String      @unique @default(cuid())
+  status       QuoteStatus @default(BORRADOR)
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  sellerId String?
+  seller   User?   @relation(fields: [sellerId], references: [id])
+
+  paymentMethodId String?
+  paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+
+  // Totales congelados al momento del presupuesto (los precios de catálogo
+  // pueden cambiar; el presupuesto guarda su propia foto).
+  discountPct Decimal @db.Decimal(6, 2) @default(0)
+  costTotal   Decimal @db.Decimal(14, 2) @default(0) // costo interno
+  saleTotal   Decimal @db.Decimal(14, 2) @default(0) // precio de venta contado
+  profit      Decimal @db.Decimal(14, 2) @default(0)
+  marginPct   Decimal @db.Decimal(6, 2) @default(0)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime?
+
+  items      QuoteItem[]
+  workOrders WorkOrder[]
+
+  @@index([status])
+  @@index([customerId])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id      String @id @default(cuid())
+  quoteId String
+
+  productId String?
+  serviceId String?
+
+  // Descripción "comercial" (vende soluciones, no componentes).
+  label    String
+  quantity Int     @default(1)
+  // Foto de valores al momento del presupuesto.
+  unitCost Decimal @db.Decimal(14, 2) @default(0)
+  unitSale Decimal @db.Decimal(14, 2) @default(0)
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+  service Service? @relation(fields: [serviceId], references: [id])
+
+  @@index([quoteId])
+  @@map("quote_items")
+}
+
+// ---------------------------------------------------------------------------
+// Instaladores
+// ---------------------------------------------------------------------------
+
+model Installer {
+  id       String  @id @default(cuid())
+  name     String
+  phone    String?
+  email    String?
+  active   Boolean @default(true)
+
+  workOrders    WorkOrder[]
+  installations Installation[]
+
+  @@map("installers")
+}
+
+// ---------------------------------------------------------------------------
+// Órdenes de trabajo (se crean al aceptar un presupuesto)
+// ---------------------------------------------------------------------------
+
+model WorkOrder {
+  id     String          @id @default(cuid())
+  code   String          @unique @default(cuid())
+  status WorkOrderStatus @default(PENDIENTE)
+
+  quoteId String?
+  quote   Quote?  @relation(fields: [quoteId], references: [id])
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  installerId String?
+  installer   Installer? @relation(fields: [installerId], references: [id])
+
+  address     String?
+  scheduledAt DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items         WorkOrderItem[]
+  checklist     InstallationChecklistItem[]
+  installation  Installation?
+
+  @@index([status])
+  @@map("work_orders")
+}
+
+model WorkOrderItem {
+  id          String  @id @default(cuid())
+  workOrderId String
+  productId   String?
+  label       String
+  quantity    Int     @default(1)
+  installed   Boolean @default(false)
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id])
+
+  @@index([workOrderId])
+  @@map("work_order_items")
+}
+
+model InstallationChecklistItem {
+  id          String  @id @default(cuid())
+  workOrderId String
+  label       String
+  done        Boolean @default(false)
+  order       Int     @default(0)
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@map("installation_checklists")
+}
+
+// ---------------------------------------------------------------------------
+// Instalaciones registradas (garantías + fotos + conformidad)
+// ---------------------------------------------------------------------------
+
+model Installation {
+  id          String   @id @default(cuid())
+  workOrderId String   @unique
+  customerId  String
+  installerId String?
+
+  installedAt DateTime  @default(now())
+  photos      String[]  @default([])
+  observations String?
+  clientSignedOff Boolean @default(false)
+
+  workOrder WorkOrder  @relation(fields: [workOrderId], references: [id])
+  customer  Customer   @relation(fields: [customerId], references: [id])
+  installer Installer? @relation(fields: [installerId], references: [id])
+
+  warranties  Warranty[]
+  maintenance Maintenance[]
+
+  @@map("installations")
+}
+
+model Warranty {
+  id             String   @id @default(cuid())
+  installationId String
+  productName    String
+  serialNumber   String?
+  warrantyMonths Int      @default(12)
+  startsAt       DateTime @default(now())
+
+  installation Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@map("warranties")
+}
+
+model Maintenance {
+  id             String          @id @default(cuid())
+  installationId String
+  type           MaintenanceType
+  scheduledAt    DateTime?
+  done           Boolean         @default(false)
+  notes          String?
+
+  installation Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@map("maintenance")
+}
+
+// ---------------------------------------------------------------------------
+// Leads (CRM básico) — cada formulario público guarda un lead
+// ---------------------------------------------------------------------------
+
+model Lead {
+  id            String     @id @default(cuid())
+  name          String
+  phone         String?
+  email         String?
+  service       String?
+  locality      String?
+  estimatedArs  Decimal?   @db.Decimal(14, 2)
+  source        String? // "cotizador-alarmas", "cotizador-camaras", etc.
+  payload       Json? // respuestas del wizard / detalle del formulario
+  status        LeadStatus @default(NUEVO)
+  notes         String?
+  createdAt     DateTime   @default(now())
+
+  @@index([status])
+  @@index([source])
+  @@map("leads")
+}
