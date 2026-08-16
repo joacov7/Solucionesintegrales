@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listQuotes } from "@/data/admin";
 import { hasDatabase } from "@/lib/prisma";
 import { formatArs } from "@/lib/pricing";
@@ -18,7 +19,15 @@ export default async function AdminPresupuestosPage() {
     <div>
       <AdminHeading
         title="Presupuestos"
-        subtitle="Presupuestos generados. Al aceptarse, se crea la orden de trabajo (Fase 2)."
+        subtitle="Al aceptar un presupuesto se genera automáticamente la orden de trabajo."
+        action={
+          <Link
+            href="/admin/presupuestos/nuevo"
+            className="rounded-xl bg-brand px-4 py-2.5 text-sm font-medium text-brand-fg hover:bg-brand/90"
+          >
+            + Nuevo presupuesto
+          </Link>
+        }
       />
       {!hasDatabase() && <DemoBanner />}
 
@@ -42,7 +51,12 @@ export default async function AdminPresupuestosPage() {
             {quotes.map((q) => (
               <tr key={q.id}>
                 <Td>
-                  <span className="font-mono text-xs">{q.code.slice(0, 8)}</span>
+                  <Link
+                    href={`/admin/presupuestos/${q.id}`}
+                    className="font-mono text-xs font-medium text-accent hover:underline"
+                  >
+                    {q.code.slice(0, 8)}
+                  </Link>
                 </Td>
                 <Td>{q.customerName ?? "—"}</Td>
                 <Td>{formatArs(q.saleTotal)}</Td>

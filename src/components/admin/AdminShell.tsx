@@ -10,6 +10,9 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/admin", label: "Dashboard", exact: true },
   { href: "/admin/presupuestos", label: "Presupuestos" },
+  { href: "/admin/ordenes", label: "Órdenes de trabajo" },
+  { href: "/admin/instaladores", label: "Instaladores" },
+  { href: "/admin/instalaciones", label: "Instalaciones" },
   { href: "/admin/leads", label: "Leads / CRM" },
   { href: "/admin/clientes", label: "Clientes" },
   { href: "/admin/productos", label: "Productos" },
@@ -68,8 +71,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
             <Link
+              href="/installer"
+              className="mt-2 rounded-lg px-3 py-2 text-sm font-medium text-ink hover:bg-brand-soft"
+            >
+              📱 App del instalador
+            </Link>
+            <Link
               href="/"
-              className="mt-2 rounded-lg px-3 py-2 text-sm font-medium text-accent hover:bg-brand-soft"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-accent hover:bg-brand-soft"
             >
               ← Ver sitio público
             </Link>

@@ -159,11 +159,22 @@ configuración y genera una solicitud para cotizar a medida.
 - [x] Admin: dashboard, productos y precios, configuración (tipo de cambio),
       financiación, mano de obra, clientes, leads, listado de presupuestos
 
-**Fase 2 (siguiente)**
+**Fase 2 (implementada)**
 
-- [ ] Constructor de presupuestos formales y conversión lead → presupuesto
-- [ ] Órdenes de trabajo, instaladores, checklist de instalación, fotos
-- [ ] App del instalador (mobile-first) y garantías
+- [x] Constructor de presupuestos formales con totales automáticos
+      (costo, venta, ganancia, margen, descuento y forma de pago)
+- [x] Flujo de estados del presupuesto; al **aceptar** se crea automáticamente
+      la **orden de trabajo** con el checklist de alarma
+- [x] Órdenes de trabajo: listado y detalle, asignación de instalador, fecha,
+      dirección, estados y notas
+- [x] Instaladores (alta y listado)
+- [x] **App del instalador** (mobile-first): trabajos asignados, detalle de la
+      orden, materiales con marcado de instalados, checklist, observaciones,
+      fotos (por enlace) y conformidad del cliente → finaliza la instalación
+- [x] Registro de instalaciones y **garantías**
+
+> Las fotos hoy se registran por enlace; la carga de archivos se integrará con
+> Supabase Storage.
 
 **Fase 3**
 
