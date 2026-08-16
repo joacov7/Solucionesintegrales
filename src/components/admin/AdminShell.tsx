@@ -16,6 +16,8 @@ const NAV = [
   { href: "/admin/leads", label: "Leads / CRM" },
   { href: "/admin/clientes", label: "Clientes" },
   { href: "/admin/productos", label: "Productos" },
+  { href: "/admin/stock", label: "Stock" },
+  { href: "/admin/mantenimiento", label: "Mantenimiento" },
   { href: "/admin/servicios", label: "Mano de obra" },
   { href: "/admin/financiacion", label: "Financiación" },
   { href: "/admin/configuracion", label: "Configuración" },
@@ -31,7 +33,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-brand-soft">
       {/* Topbar mobile */}
-      <div className="flex items-center justify-between border-b border-line bg-surface px-4 py-3 lg:hidden">
+      <div className="flex items-center justify-between border-b border-line bg-surface px-4 py-3 lg:hidden print:hidden">
         <span className="font-bold text-ink">{siteConfig.name} · Admin</span>
         <button
           onClick={() => setOpen((v) => !v)}
@@ -46,7 +48,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         {/* Sidebar */}
         <aside
           className={cn(
-            "w-full shrink-0 border-b border-line bg-surface lg:w-60 lg:rounded-2xl lg:border lg:shadow-card",
+            "w-full shrink-0 border-b border-line bg-surface lg:w-60 lg:rounded-2xl lg:border lg:shadow-card print:hidden",
             open ? "block" : "hidden lg:block"
           )}
         >

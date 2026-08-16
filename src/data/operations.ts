@@ -8,6 +8,7 @@ import { prisma, hasDatabase } from "@/lib/prisma";
 import type {
   QuoteStatus,
   WorkOrderStatus,
+  MaintenanceType,
 } from "@prisma/client";
 import { computeQuoteTotals, type QuoteLine } from "@/lib/pricing";
 import { alarmChecklistTemplate } from "./initial-data";
@@ -382,9 +383,21 @@ export async function completeInstallation(
   try {
     const wo = await prisma.workOrder.findUnique({
       where: { id: workOrderId },
-      include: { installation: true },
+      include: { installation: true, items: true },
     });
     if (!wo) return { ok: false, message: "Orden no encontrada." };
+
+    // Descuento de stock (solo la primera vez, para ítems instalados con producto).
+    if (!wo.installation) {
+      for (const item of wo.items) {
+        if (item.productId && item.installed) {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: item.quantity } },
+          });
+        }
+      }
+    }
 
     if (wo.installation) {
       await prisma.installation.update({
@@ -502,4 +515,159 @@ export async function createInstaller(data: {
     console.error(e);
     return { ok: false, message: "No se pudo crear el instalador." };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Mantenimiento (Fase 3)
+// ---------------------------------------------------------------------------
+
+export type MaintenanceRow = {
+  id: string;
+  installationId: string;
+  customerName: string;
+  type: MaintenanceType;
+  scheduledAt: Date | null;
+  done: boolean;
+  notes: string | null;
+};
+
+export async function listMaintenance(): Promise<MaintenanceRow[]> {
+  if (!hasDatabase()) return [];
+  const rows = await prisma.maintenance.findMany({
+    include: { installation: { include: { customer: true } } },
+    orderBy: [{ done: "asc" }, { scheduledAt: "asc" }],
+    take: 200,
+  });
+  return rows.map((m) => ({
+    id: m.id,
+    installationId: m.installationId,
+    customerName: m.installation.customer.name,
+    type: m.type,
+    scheduledAt: m.scheduledAt,
+    done: m.done,
+    notes: m.notes,
+  }));
+}
+
+export type InstallationOption = { id: string; label: string };
+
+export async function listInstallationOptions(): Promise<InstallationOption[]> {
+  if (!hasDatabase()) return [];
+  const rows = await prisma.installation.findMany({
+    include: { customer: true },
+    orderBy: { installedAt: "desc" },
+    take: 200,
+  });
+  return rows.map((i) => ({
+    id: i.id,
+    label: `${i.customer.name} · ${new Date(i.installedAt).toLocaleDateString("es-AR")}`,
+  }));
+}
+
+export async function createMaintenance(data: {
+  installationId: string;
+  type: MaintenanceType;
+  scheduledAt?: Date | null;
+  notes?: string;
+}): Promise<WriteResult> {
+  if (!hasDatabase()) return DEMO;
+  try {
+    await prisma.maintenance.create({ data });
+    return { ok: true, message: "Mantenimiento agendado." };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: "No se pudo agendar el mantenimiento." };
+  }
+}
+
+export async function setMaintenanceDone(
+  id: string,
+  done: boolean
+): Promise<WriteResult> {
+  if (!hasDatabase()) return DEMO;
+  try {
+    await prisma.maintenance.update({ where: { id }, data: { done } });
+    return { ok: true, message: "Mantenimiento actualizado." };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, message: "No se pudo actualizar." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Portal de clientes (Fase 3)
+// ---------------------------------------------------------------------------
+// NOTA: sin autenticación todavía. El acceso es por teléfono como stand-in.
+// Con Supabase Auth (rol CUSTOMER) + RLS, cada cliente verá solo su información.
+
+export type CustomerPortalData = {
+  customer: { id: string; name: string; locality: string | null };
+  quotes: { id: string; code: string; status: QuoteStatus; saleTotal: number; createdAt: Date }[];
+  workOrders: { id: string; code: string; status: WorkOrderStatus; scheduledAt: Date | null }[];
+  installations: {
+    id: string;
+    installedAt: Date;
+    warranties: { productName: string; warrantyMonths: number; startsAt: Date }[];
+  }[];
+  maintenance: { id: string; type: MaintenanceType; scheduledAt: Date | null; done: boolean }[];
+};
+
+export async function getCustomerPortal(
+  phone: string
+): Promise<CustomerPortalData | null> {
+  if (!hasDatabase()) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 6) return null;
+
+  const customer = await prisma.customer.findFirst({
+    where: {
+      OR: [
+        { phone: { contains: digits } },
+        { whatsapp: { contains: digits } },
+      ],
+    },
+    include: {
+      quotes: { orderBy: { createdAt: "desc" } },
+      workOrders: { orderBy: { createdAt: "desc" } },
+      installations: {
+        include: { warranties: true, maintenance: true },
+        orderBy: { installedAt: "desc" },
+      },
+    },
+  });
+  if (!customer) return null;
+
+  return {
+    customer: { id: customer.id, name: customer.name, locality: customer.locality },
+    quotes: customer.quotes.map((q) => ({
+      id: q.id,
+      code: q.code,
+      status: q.status,
+      saleTotal: Number(q.saleTotal),
+      createdAt: q.createdAt,
+    })),
+    workOrders: customer.workOrders.map((w) => ({
+      id: w.id,
+      code: w.code,
+      status: w.status,
+      scheduledAt: w.scheduledAt,
+    })),
+    installations: customer.installations.map((i) => ({
+      id: i.id,
+      installedAt: i.installedAt,
+      warranties: i.warranties.map((w) => ({
+        productName: w.productName,
+        warrantyMonths: w.warrantyMonths,
+        startsAt: w.startsAt,
+      })),
+    })),
+    maintenance: customer.installations.flatMap((i) =>
+      i.maintenance.map((m) => ({
+        id: m.id,
+        type: m.type,
+        scheduledAt: m.scheduledAt,
+        done: m.done,
+      }))
+    ),
+  };
 }

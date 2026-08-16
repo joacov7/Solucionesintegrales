@@ -155,6 +155,10 @@ model Product {
   marginPct         Decimal @db.Decimal(6, 2)
   // Tiempo estimado de instalación en minutos.
   installMinutes    Int     @default(0)
+  // Stock disponible (Fase 3). Se descuenta al finalizar una instalación.
+  stock             Int     @default(0)
+  // Umbral de stock bajo para alertas en el panel.
+  lowStockThreshold Int     @default(3)
   active            Boolean @default(true)
 
   categoryId String

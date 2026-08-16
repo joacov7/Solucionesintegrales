@@ -23,10 +23,18 @@ export async function saveSettingsAction(
 
 export async function saveProductAction(
   id: string,
-  data: { priceUsd?: number; marginPct?: number; active?: boolean }
+  data: {
+    priceUsd?: number;
+    marginPct?: number;
+    active?: boolean;
+    stock?: number;
+    lowStockThreshold?: number;
+  }
 ): Promise<WriteResult> {
   const res = await updateProduct(id, data);
   revalidatePath("/admin/productos");
+  revalidatePath("/admin/stock");
+  revalidatePath("/admin");
   return res;
 }
 

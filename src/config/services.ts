@@ -89,7 +89,7 @@ export const serviceAreas: ServiceArea[] = [
     seoDescription:
       "Automatizá luces, portones y cerraduras con domótica. Control desde el celular e integración con tu sistema de seguridad.",
     icon: "home",
-    cta: { label: "Consultar por WhatsApp", href: "/contacto" },
+    cta: { label: "Consultar domótica", href: "/cotizar/domotica" },
     bullets: [
       "Automatización de luces",
       "Portones y cerraduras",

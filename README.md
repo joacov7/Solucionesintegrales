@@ -176,10 +176,29 @@ configuración y genera una solicitud para cotizar a medida.
 > Las fotos hoy se registran por enlace; la carga de archivos se integrará con
 > Supabase Storage.
 
-**Fase 3**
+**Fase 3 (implementada)**
 
-- [ ] Portal de clientes con Supabase Auth
-- [ ] Domótica, mantenimiento, stock, facturación
+- [x] **Portal de clientes** (`/client`): acceso por teléfono (stand-in de
+      Supabase Auth) para ver presupuestos, órdenes, instalaciones, garantías y
+      mantenimientos propios
+- [x] **Mantenimiento**: agenda y seguimiento (preventivo, reparación, visita
+      técnica, ampliación, cambio de batería) por instalación
+- [x] **Stock**: control de existencias con alerta de stock bajo; se descuenta
+      automáticamente al finalizar una instalación
+- [x] **Facturación**: comprobante imprimible / PDF por presupuesto (base para
+      facturación electrónica; hoy sin AFIP)
+- [x] **Domótica**: formulario de consulta con captura de lead
+
+> Cambio de esquema en esta fase: se agregó `stock` y `lowStockThreshold` a
+> `products`. Si ya tenías la base creada, corré `npm run db:push` (o una
+> migración) para aplicarlo.
+
+**Pendiente para producción**
+
+- [ ] Autenticación real (Supabase Auth) + Row Level Security en `/admin`,
+      `/installer` y `/client`
+- [ ] Carga de fotos con Supabase Storage
+- [ ] Facturación electrónica (AFIP)
 
 ---
 

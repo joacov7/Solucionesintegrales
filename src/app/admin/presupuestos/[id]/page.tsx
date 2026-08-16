@@ -103,6 +103,12 @@ export default async function QuoteDetailPage({
               hasWorkOrder={quote.hasWorkOrder}
               workOrderId={quote.workOrderId}
             />
+            <Link
+              href={`/admin/presupuestos/${quote.id}/comprobante`}
+              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-accent"
+            >
+              Ver comprobante imprimible →
+            </Link>
           </AdminCard>
         </div>
       </div>

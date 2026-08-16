@@ -36,6 +36,8 @@ export type CatalogProduct = {
   hasVat: boolean;
   marginPct: number;
   installMinutes: number;
+  stock: number;
+  lowStockThreshold: number;
   active: boolean;
 };
 
@@ -132,6 +134,8 @@ export async function listProducts(
         hasVat: p.hasVat,
         marginPct: Number(p.marginPct),
         installMinutes: p.installMinutes,
+        stock: p.stock,
+        lowStockThreshold: p.lowStockThreshold,
         active: p.active,
       }));
     } catch {
@@ -154,6 +158,8 @@ export async function listProducts(
       hasVat: p.hasVat,
       marginPct: DEFAULT_MARGIN_PCT,
       installMinutes: p.installMinutes,
+      stock: 0,
+      lowStockThreshold: 3,
       active: true,
     }));
 }

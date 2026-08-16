@@ -129,7 +129,13 @@ export async function updateSettings(
 
 export async function updateProduct(
   id: string,
-  data: { priceUsd?: number; marginPct?: number; active?: boolean }
+  data: {
+    priceUsd?: number;
+    marginPct?: number;
+    active?: boolean;
+    stock?: number;
+    lowStockThreshold?: number;
+  }
 ): Promise<WriteResult> {
   if (!hasDatabase()) return DEMO;
   try {

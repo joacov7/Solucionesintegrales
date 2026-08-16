@@ -12,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/cotizar/camaras",
     "/cotizar/electricidad",
     "/cotizar/solar",
+    "/cotizar/domotica",
   ].map((path) => ({
     url: `${base}${path}`,
     lastModified: now,

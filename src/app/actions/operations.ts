@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { QuoteStatus, WorkOrderStatus } from "@prisma/client";
+import type { QuoteStatus, WorkOrderStatus, MaintenanceType } from "@prisma/client";
 import {
   createQuote,
   setQuoteStatus,
@@ -10,8 +10,12 @@ import {
   setChecklistItemDone,
   completeInstallation,
   createInstaller,
+  createMaintenance,
+  setMaintenanceDone,
+  getCustomerPortal,
   type NewQuote,
   type WriteResult,
+  type CustomerPortalData,
 } from "@/data/operations";
 
 export async function createQuoteAction(input: NewQuote): Promise<WriteResult> {
@@ -100,4 +104,38 @@ export async function createInstallerAction(data: {
   const res = await createInstaller(data);
   revalidatePath("/admin/instaladores");
   return res;
+}
+
+export async function createMaintenanceAction(data: {
+  installationId: string;
+  type: MaintenanceType;
+  scheduledAt?: Date | null;
+  notes?: string;
+}): Promise<WriteResult> {
+  const res = await createMaintenance(data);
+  revalidatePath("/admin/mantenimiento");
+  return res;
+}
+
+export async function setMaintenanceDoneAction(
+  id: string,
+  done: boolean
+): Promise<WriteResult> {
+  const res = await setMaintenanceDone(id, done);
+  revalidatePath("/admin/mantenimiento");
+  return res;
+}
+
+/** Consulta del portal de clientes (acceso por teléfono, sin auth todavía). */
+export async function lookupCustomerPortalAction(
+  phone: string
+): Promise<{ ok: boolean; data: CustomerPortalData | null; message?: string }> {
+  const data = await getCustomerPortal(phone);
+  if (!data)
+    return {
+      ok: false,
+      data: null,
+      message: "No encontramos datos con ese teléfono. Escribinos por WhatsApp.",
+    };
+  return { ok: true, data };
 }
