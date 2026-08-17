@@ -204,15 +204,32 @@ configuración y genera una solicitud para cotizar a medida.
 
 ## Seguridad
 
-Fase 1 sin autenticación (el panel `/admin` es abierto en desarrollo).
-La arquitectura queda lista para **Supabase Auth**:
+Hay una **protección de acceso interina** (middleware + sesión firmada) sobre
+`/admin` y `/installer`, lista para reemplazar por **Supabase Auth** sin tocar
+el resto de la app:
+
+- Configurá `AUTH_ADMIN_PASSWORD` y/o `AUTH_INSTALLER_PASSWORD` (+ `AUTH_SECRET`)
+  para exigir login en `/login`. Sin contraseñas, el panel queda abierto
+  (modo dev/demo), coherente con el resto de la plataforma.
+- Roles: `ADMIN` (acceso total) e `INSTALLER` (solo `/installer`).
+- La lógica de identidad está aislada en `src/lib/auth.ts`: para migrar a
+  Supabase Auth se reemplaza la verificación de sesión ahí.
+
+Arquitectura lista para el modelo completo de roles:
 
 - Tabla `users` con enum `UserRole` (ADMIN, SELLER, INSTALLER, CUSTOMER).
 - Al integrar Supabase Auth, agregar **Row Level Security** para que el rol
   CUSTOMER solo acceda a su propia información.
 - Variables previstas en `.env.example` (`NEXT_PUBLIC_SUPABASE_URL`, etc.).
 
-> ⚠️ Antes de exponer `/admin` en producción, protegerlo con autenticación.
+> ⚠️ En producción, definí `AUTH_SECRET` y las contraseñas (o integrá Supabase
+> Auth) antes de exponer `/admin`.
+
+## Integración continua (CI)
+
+`.github/workflows/ci.yml` corre en cada push y PR: instala dependencias,
+genera el cliente Prisma, hace **typecheck** y **build**. No requiere base de
+datos (las páginas que la usan son dinámicas y degradan a modo demo).
 
 ---
 

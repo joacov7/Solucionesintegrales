@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/site";
 import { Icon } from "@/components/ui/Icon";
+import { LogoutButton } from "@/features/auth/LogoutButton";
 
 export const metadata: Metadata = {
   title: "App del instalador",
@@ -30,9 +31,12 @@ export default function InstallerLayout({
               {siteConfig.shortName} · Instalador
             </span>
           </Link>
-          <Link href="/admin" className="text-xs font-medium text-muted">
-            Admin
-          </Link>
+          <div className="flex items-center gap-1">
+            <Link href="/admin" className="text-xs font-medium text-muted">
+              Admin
+            </Link>
+            <LogoutButton className="px-2 py-1 text-xs" />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-lg px-4 py-5">{children}</main>

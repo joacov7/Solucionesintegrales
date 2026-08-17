@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { siteConfig } from "@/config/site";
 import { Icon } from "@/components/ui/Icon";
 import { cn } from "@/lib/utils";
+import { LogoutButton } from "@/features/auth/LogoutButton";
 
 const NAV = [
   { href: "/admin", label: "Dashboard", exact: true },
@@ -84,6 +85,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             >
               ← Ver sitio público
             </Link>
+            <LogoutButton />
           </nav>
         </aside>
 
