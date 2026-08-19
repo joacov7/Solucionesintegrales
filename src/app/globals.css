@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Valores por defecto de la paleta (RGB sin comas para usar con
+ * rgb(var(--x) / <alpha>)). El layout raíz los sobreescribe desde
+ * src/config/site.ts, así que cambiando la config se actualiza todo.
+ */
+:root {
+  --brand: 15 23 42;
+  --brand-fg: 255 255 255;
+  --brand-soft: 241 245 249;
+  --accent: 37 99 235;
+  --accent-fg: 255 255 255;
+  --ink: 15 23 42;
+  --muted: 100 116 139;
+  --surface: 255 255 255;
+  --line: 226 232 240;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: rgb(var(--surface));
+  color: rgb(var(--ink));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Fondo de secciones suaves */
+.bg-section {
+  background-color: rgb(var(--brand-soft));
+}
+
+/* Gradiente del hero, tono tecnológico */
+.hero-gradient {
+  background:
+    radial-gradient(60% 60% at 80% 0%, rgb(var(--accent) / 0.12), transparent 60%),
+    radial-gradient(50% 50% at 0% 20%, rgb(var(--brand) / 0.06), transparent 60%),
+    rgb(var(--surface));
+}
