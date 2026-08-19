@@ -14,7 +14,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Conexión pooled de Neon (para la app en runtime). Termina en "-pooler".
+  url       = env("DATABASE_URL")
+  // Conexión directa de Neon (para migraciones). Sin "-pooler".
+  // IMPORTANTE: al declarar directUrl hay que definir AMBAS variables.
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------

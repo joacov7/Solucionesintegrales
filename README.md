@@ -88,16 +88,38 @@ npm install
 
 # 2) Variables de entorno
 cp .env.example .env
-#   Editá DATABASE_URL con tu Postgres. (Sin ella, corre en modo demo.)
+#   Editá DATABASE_URL y DIRECT_URL. (Sin ellas, corre en modo demo.)
 
-# 3) Base de datos (si configuraste DATABASE_URL)
+# 3) Base de datos (si configuraste las variables)
 npm run db:generate      # genera el cliente Prisma
-npm run db:migrate       # crea las tablas (o: npm run db:push)
+npm run db:push          # crea las tablas en la base (o: npm run db:migrate)
 npm run db:seed          # carga productos Vetti, servicios, paquetes, config
 
 # 4) Levantar
 npm run dev              # http://localhost:3000
 ```
+
+### Base de datos en Neon (recomendado)
+
+1. Entrá a [neon.tech](https://neon.tech) y creá un proyecto (plan free alcanza).
+   Elegí una región cercana (ej: AWS `us-east-2`).
+2. En el proyecto, abrí **Connect** (o "Connection Details").
+3. Copiá **dos** connection strings:
+   - La **pooled** (el host tiene `-pooler`) → va en `DATABASE_URL`.
+   - La **directa** (sin `-pooler`) → va en `DIRECT_URL`.
+   Si solo ves una, activá el toggle **Connection pooling** para ver la pooled;
+   la directa es la misma URL pero sin `-pooler` en el host.
+4. Pegá ambas en tu `.env` (ver `.env.example`). Deben terminar en
+   `?sslmode=require`.
+5. Creá las tablas y cargá los datos iniciales:
+   ```bash
+   npm run db:push
+   npm run db:seed
+   ```
+6. `npm run dev` → la app deja el modo demo y persiste todo en Neon.
+
+> Prisma usa `DIRECT_URL` para migrar (la pooled de Neon usa PgBouncer y no es
+> ideal para DDL) y `DATABASE_URL` (pooled) para las consultas de la app.
 
 Rutas útiles:
 
@@ -137,11 +159,16 @@ configuración y genera una solicitud para cotizar a medida.
 ## Deploy en Vercel
 
 1. Importá el repo en Vercel.
-2. Configurá las variables de entorno (`DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`).
-3. Usá un Postgres administrado (Neon / Vercel Postgres / Railway).
-4. Build command: `npm run build` (ya corre `prisma generate`).
-5. Después del primer deploy, corré las migraciones y el seed una vez:
-   `npx prisma migrate deploy && npm run db:seed`.
+2. Configurá las variables de entorno: `DATABASE_URL` (pooled de Neon),
+   `DIRECT_URL` (directa de Neon), `NEXT_PUBLIC_SITE_URL` y —para cerrar el
+   panel— `AUTH_SECRET` + `AUTH_ADMIN_PASSWORD`.
+3. Build command: `npm run build` (ya corre `prisma generate`; no necesita DB).
+4. Creá las tablas y cargá el seed una sola vez. Podés hacerlo desde tu máquina
+   apuntando a Neon (`npm run db:push && npm run db:seed`) o con
+   `npx prisma migrate deploy` si usás migraciones versionadas.
+
+> Tip Neon + Vercel: si integrás Neon desde el Marketplace de Vercel, las
+> variables se cargan solas; verificá igual que `DATABASE_URL` sea la pooled.
 
 ---
 
