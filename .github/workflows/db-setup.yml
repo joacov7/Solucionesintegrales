@@ -1,0 +1,40 @@
+name: DB setup (Neon)
+
+# Crea las tablas (prisma db push) y carga los datos iniciales (seed) en Neon.
+# Se ejecuta a mano desde la pestaña Actions. Necesita dos secrets del repo:
+#   DATABASE_URL  → conexión pooled de Neon (con "-pooler")
+#   DIRECT_URL    → conexión directa de Neon (sin "-pooler")
+on:
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "¿Cargar datos iniciales (seed)?"
+        type: boolean
+        default: true
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Push schema to Neon (crea las tablas)
+        run: npx prisma db push
+
+      - name: Seed inicial (productos Vetti, config, paquetes)
+        if: ${{ inputs.seed }}
+        run: npm run db:seed
