@@ -23,7 +23,6 @@ export function authEnabled(): boolean {
   );
 }
 
-/** Devuelve un error de configuración en producción en lugar de abrir el panel. */
 export function authConfigurationError(): string | null {
   if (process.env.NODE_ENV !== "production") return null;
   if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
@@ -54,7 +53,7 @@ export function verifyPassword(password: string): Role | null {
 function bytesToB64url(bytes: Uint8Array): string {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function strToB64url(str: string): string {
@@ -95,7 +94,7 @@ export async function createSessionToken(
     ...(role === "INSTALLER" && installerId ? { installerId } : {}),
   };
   const data = strToB64url(JSON.stringify(payload));
-  return `${data}.${await sign(data)}`;
+  return data + "." + await sign(data);
 }
 
 export async function verifySessionToken(
@@ -118,8 +117,10 @@ export async function verifySessionToken(
     ) {
       return null;
     }
-    if (payload.role === "INSTALLER" &&
-      (typeof payload.installerId !== "string" || payload.installerId.length < 1)) {
+    if (
+      payload.role === "INSTALLER" &&
+      (typeof payload.installerId !== "string" || payload.installerId.length < 1)
+    ) {
       return null;
     }
     return payload;
