@@ -7,7 +7,10 @@ import { loginAction } from "@/app/actions/auth";
 export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/admin";
+  const requestedNext = params.get("next");
+  const next = requestedNext?.startsWith("/") && !requestedNext.startsWith("//")
+    ? requestedNext
+    : "/admin";
 
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

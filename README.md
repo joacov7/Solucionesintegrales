@@ -20,9 +20,9 @@ Estética tecnológica moderna, mobile-first, PWA instalable.
 - **PWA** (manifest + responsive + instalable)
 - Preparado para deploy en **Vercel**
 
-> La autenticación no está implementada todavía (Fase 1). La arquitectura queda
-> preparada para **Supabase Auth + roles** (ADMIN, SELLER, INSTALLER, CUSTOMER)
-> y Row Level Security. Ver [Seguridad](#seguridad).
+> La autenticación actual es interina: sesiones firmadas y contraseñas de entorno,
+> con autorización en las rutas y Server Actions. Para varios usuarios e instaladores
+> se debe migrar a autenticación individual. Ver [Seguridad](#seguridad).
 
 ---
 
@@ -205,9 +205,9 @@ configuración y genera una solicitud para cotizar a medida.
 
 **Fase 3 (implementada)**
 
-- [x] **Portal de clientes** (`/client`): acceso por teléfono (stand-in de
-      Supabase Auth) para ver presupuestos, órdenes, instalaciones, garantías y
-      mantenimientos propios
+- [x] **Portal de clientes** (`/client`): interfaz inicial para futuras consultas
+      de presupuestos, órdenes, instalaciones, garantías y mantenimientos
+- [ ] Acceso al portal con autenticación real (el acceso por teléfono está deshabilitado)
 - [x] **Mantenimiento**: agenda y seguimiento (preventivo, reparación, visita
       técnica, ampliación, cambio de batería) por instalación
 - [x] **Stock**: control de existencias con alerta de stock bajo; se descuenta
@@ -222,8 +222,8 @@ configuración y genera una solicitud para cotizar a medida.
 
 **Pendiente para producción**
 
-- [ ] Autenticación real (Supabase Auth) + Row Level Security en `/admin`,
-      `/installer` y `/client`
+- [ ] Autenticación individual (Supabase Auth) y políticas de acceso por usuario
+      en `/admin`, `/installer` y `/client`
 - [ ] Carga de fotos con Supabase Storage
 - [ ] Facturación electrónica (AFIP)
 
@@ -231,26 +231,41 @@ configuración y genera una solicitud para cotizar a medida.
 
 ## Seguridad
 
-Hay una **protección de acceso interina** (middleware + sesión firmada) sobre
-`/admin` y `/installer`, lista para reemplazar por **Supabase Auth** sin tocar
-el resto de la app:
+La autenticación actual es interina y usa contraseñas de entorno con sesiones
+firmadas HMAC. Se aplicaron controles de autorización en dos capas:
 
-- Configurá `AUTH_ADMIN_PASSWORD` y/o `AUTH_INSTALLER_PASSWORD` (+ `AUTH_SECRET`)
-  para exigir login en `/login`. Sin contraseñas, el panel queda abierto
-  (modo dev/demo), coherente con el resto de la plataforma.
-- Roles: `ADMIN` (acceso total) e `INSTALLER` (solo `/installer`).
-- La lógica de identidad está aislada en `src/lib/auth.ts`: para migrar a
-  Supabase Auth se reemplaza la verificación de sesión ahí.
+- Middleware para proteger las rutas `/admin` y `/installer`.
+- Verificación de rol dentro de cada Server Action administrativa u operativa.
+- En producción, la aplicación **falla cerrada** si faltan las contraseñas o
+  `AUTH_SECRET` (mínimo 32 caracteres). No se permite entrar en modo demo abierto.
+- Las sesiones duran 12 horas y usan cookie `httpOnly`, `sameSite=lax` y
+  `secure` en producción.
+- El instalador se vincula mediante `AUTH_INSTALLER_ID`; el listado y el
+  detalle se limitan a sus órdenes asignadas. Las acciones verifican también
+  la asignación de la orden y de cada ítem/checklist.
+- El acceso al portal de clientes por teléfono quedó deshabilitado: un número
+  telefónico no es un factor de autenticación suficiente para exponer datos
+  personales, presupuestos o garantías.
 
-Arquitectura lista para el modelo completo de roles:
+### Variables de entorno de autenticación
 
-- Tabla `users` con enum `UserRole` (ADMIN, SELLER, INSTALLER, CUSTOMER).
-- Al integrar Supabase Auth, agregar **Row Level Security** para que el rol
-  CUSTOMER solo acceda a su propia información.
-- Variables previstas en `.env.example` (`NEXT_PUBLIC_SUPABASE_URL`, etc.).
+En producción configurá:
 
-> ⚠️ En producción, definí `AUTH_SECRET` y las contraseñas (o integrá Supabase
-> Auth) antes de exponer `/admin`.
+- `AUTH_SECRET`: secreto aleatorio único de al menos 32 caracteres.
+- `AUTH_ADMIN_PASSWORD`: contraseña de administración.
+- `AUTH_INSTALLER_PASSWORD`: contraseña interina del instalador, si se usa.
+- `AUTH_INSTALLER_ID`: ID del registro del instalador asociado a esa contraseña.
+
+El esquema interino permite un único instalador asociado por entorno. Para
+varios instaladores se debe implementar autenticación individual (por ejemplo,
+Supabase Auth) y vincular cada identidad a un registro de instalador. No
+compartas una contraseña entre técnicos si necesitás trazabilidad individual.
+
+**Pendiente antes de producción:** autenticación individual para todos los
+usuarios, portal de clientes con verificación real (OTP/email), rate limiting,
+auditoría de cambios, almacenamiento privado de fotografías y pruebas de
+seguridad. Los controles incorporados reducen riesgos, pero no reemplazan una
+auditoría profesional ni una revisión del despliegue y sus variables.
 
 ## Integración continua (CI)
 

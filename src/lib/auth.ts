@@ -1,64 +1,68 @@
 /**
- * AUTENTICACIÓN (interina, lista para reemplazar por Supabase Auth)
- * ---------------------------------------------------------------------------
- * Protege /admin y /installer con una sesión firmada (HMAC-SHA256) guardada en
- * cookie. Los roles y la verificación viven acá para poder cambiar la fuente de
- * identidad por Supabase Auth sin tocar el resto de la app.
- *
- * Comportamiento:
- *  - Si NO hay contraseñas configuradas por entorno, la protección se
- *    DESACTIVA (modo dev/demo abierto), coherente con el resto de la plataforma.
- *  - Si hay contraseñas, se exige login.
- *
- * Variables de entorno:
- *  - AUTH_SECRET            → clave para firmar la sesión (obligatoria en prod)
- *  - AUTH_ADMIN_PASSWORD    → habilita el login de administración/ventas
- *  - AUTH_INSTALLER_PASSWORD→ habilita el login de instaladores
- *
- * NOTA: usa solo Web Crypto para funcionar también en el runtime edge (middleware).
+ * Autenticación interina con sesiones HMAC. En producción falla cerrada:
+ * requiere contraseñas y un secreto de firma fuerte.
  */
-
 export type Role = "ADMIN" | "INSTALLER";
 
-export const SESSION_COOKIE = "si_session";
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 días
+export type SessionPayload = {
+  role: Role;
+  exp: number;
+  installerId?: string;
+};
 
-type SessionPayload = { role: Role; exp: number };
+export const SESSION_COOKIE = "si_session";
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 horas
 
 function getSecret(): string {
-  return process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me";
+  return process.env.AUTH_SECRET ?? "dev-only-insecure-secret";
 }
 
-/** ¿Está activada la protección? (hay al menos una contraseña configurada) */
 export function authEnabled(): boolean {
   return Boolean(
     process.env.AUTH_ADMIN_PASSWORD || process.env.AUTH_INSTALLER_PASSWORD
   );
 }
 
-/** Valida una contraseña y devuelve el rol correspondiente, o null. */
-export function verifyPassword(password: string): Role | null {
-  const admin = process.env.AUTH_ADMIN_PASSWORD;
-  const installer = process.env.AUTH_INSTALLER_PASSWORD;
-  if (admin && password === admin) return "ADMIN";
-  if (installer && password === installer) return "INSTALLER";
+export function authConfigurationError(): string | null {
+  if (process.env.NODE_ENV !== "production") return null;
+  if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
+    return "Falta AUTH_SECRET o tiene menos de 32 caracteres.";
+  }
+  if (!authEnabled()) {
+    return "No hay contraseñas de acceso configuradas.";
+  }
+  if (process.env.AUTH_INSTALLER_PASSWORD && !process.env.AUTH_INSTALLER_ID) {
+    return "AUTH_INSTALLER_ID es obligatorio cuando se habilita el acceso de instaladores.";
+  }
   return null;
 }
 
-// --- Codificación base64url segura para edge y node ------------------------
+export function verifyPassword(password: string): Role | null {
+  if (typeof password !== "string" || password.length < 1 || password.length > 256) {
+    return null;
+  }
+  if (process.env.AUTH_ADMIN_PASSWORD && password === process.env.AUTH_ADMIN_PASSWORD) {
+    return "ADMIN";
+  }
+  if (process.env.AUTH_INSTALLER_PASSWORD && password === process.env.AUTH_INSTALLER_PASSWORD) {
+    return "INSTALLER";
+  }
+  return null;
+}
+
 function bytesToB64url(bytes: Uint8Array): string {
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 function strToB64url(str: string): string {
   return bytesToB64url(new TextEncoder().encode(str));
 }
 
-function b64urlToStr(b64url: string): string {
-  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
-  const bin = atob(b64);
+function b64urlToStr(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(normalized);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new TextDecoder().decode(bytes);
@@ -72,34 +76,53 @@ async function sign(data: string): Promise<string> {
     false,
     ["sign"]
   );
-  const sig = await crypto.subtle.sign(
+  const signature = await crypto.subtle.sign(
     "HMAC",
     key,
     new TextEncoder().encode(data)
   );
-  return bytesToB64url(new Uint8Array(sig));
+  return bytesToB64url(new Uint8Array(signature));
 }
 
-/** Crea el token de sesión firmado para un rol. */
-export async function createSessionToken(role: Role): Promise<string> {
-  const payload: SessionPayload = { role, exp: Date.now() + SESSION_TTL_MS };
+export async function createSessionToken(
+  role: Role,
+  installerId?: string
+): Promise<string> {
+  const payload: SessionPayload = {
+    role,
+    exp: Date.now() + SESSION_TTL_MS,
+    ...(role === "INSTALLER" && installerId ? { installerId } : {}),
+  };
   const data = strToB64url(JSON.stringify(payload));
-  const sig = await sign(data);
-  return `${data}.${sig}`;
+  return data + "." + await sign(data);
 }
 
-/** Verifica el token y devuelve el payload, o null si es inválido/expirado. */
 export async function verifySessionToken(
   token: string | undefined
 ): Promise<SessionPayload | null> {
-  if (!token) return null;
-  const [data, sig] = token.split(".");
-  if (!data || !sig) return null;
-  const expected = await sign(data);
-  if (expected !== sig) return null;
+  if (!token || token.length > 2048) return null;
+  const parts = token.split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+
   try {
-    const payload = JSON.parse(b64urlToStr(data)) as SessionPayload;
-    if (typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
+    const expected = await sign(parts[0]);
+    if (expected !== parts[1]) return null;
+
+    const payload = JSON.parse(b64urlToStr(parts[0])) as SessionPayload;
+    if (
+      (payload.role !== "ADMIN" && payload.role !== "INSTALLER") ||
+      typeof payload.exp !== "number" ||
+      !Number.isFinite(payload.exp) ||
+      payload.exp <= Date.now()
+    ) {
+      return null;
+    }
+    if (
+      payload.role === "INSTALLER" &&
+      (typeof payload.installerId !== "string" || payload.installerId.length < 1)
+    ) {
+      return null;
+    }
     return payload;
   } catch {
     return null;

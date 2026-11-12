@@ -3,11 +3,14 @@ import { listWorkOrders } from "@/data/operations";
 import { hasDatabase } from "@/lib/prisma";
 import { StatusBadge } from "@/components/admin/ui";
 import { Icon } from "@/components/ui/Icon";
+import { getAuthenticatedSession } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function InstallerHomePage() {
-  const orders = hasDatabase() ? await listWorkOrders() : [];
+  const session = await getAuthenticatedSession();
+  const installerId = session?.role === "INSTALLER" ? session.installerId : undefined;
+  const orders = hasDatabase() ? await listWorkOrders(installerId) : [];
   const active = orders.filter((o) => o.status !== "CANCELADA");
 
   return (
