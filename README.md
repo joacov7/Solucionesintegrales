@@ -20,9 +20,9 @@ Estética tecnológica moderna, mobile-first, PWA instalable.
 - **PWA** (manifest + responsive + instalable)
 - Preparado para deploy en **Vercel**
 
-> La autenticación no está implementada todavía (Fase 1). La arquitectura queda
-> preparada para **Supabase Auth + roles** (ADMIN, SELLER, INSTALLER, CUSTOMER)
-> y Row Level Security. Ver [Seguridad](#seguridad).
+> La autenticación actual es interina: sesiones firmadas y contraseñas de entorno,
+> con autorización en las rutas y Server Actions. Para varios usuarios e instaladores
+> se debe migrar a autenticación individual. Ver [Seguridad](#seguridad).
 
 ---
 
@@ -205,9 +205,9 @@ configuración y genera una solicitud para cotizar a medida.
 
 **Fase 3 (implementada)**
 
-- [x] **Portal de clientes** (`/client`): acceso por teléfono (stand-in de
-      Supabase Auth) para ver presupuestos, órdenes, instalaciones, garantías y
-      mantenimientos propios
+- [x] **Portal de clientes** (`/client`): interfaz inicial para futuras consultas
+      de presupuestos, órdenes, instalaciones, garantías y mantenimientos
+- [ ] Acceso al portal con autenticación real (el acceso por teléfono está deshabilitado)
 - [x] **Mantenimiento**: agenda y seguimiento (preventivo, reparación, visita
       técnica, ampliación, cambio de batería) por instalación
 - [x] **Stock**: control de existencias con alerta de stock bajo; se descuenta
@@ -222,8 +222,8 @@ configuración y genera una solicitud para cotizar a medida.
 
 **Pendiente para producción**
 
-- [ ] Autenticación real (Supabase Auth) + Row Level Security en `/admin`,
-      `/installer` y `/client`
+- [ ] Autenticación individual (Supabase Auth) y políticas de acceso por usuario
+      en `/admin`, `/installer` y `/client`
 - [ ] Carga de fotos con Supabase Storage
 - [ ] Facturación electrónica (AFIP)
 
