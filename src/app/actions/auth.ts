@@ -6,19 +6,33 @@ import {
   createSessionToken,
   SESSION_COOKIE,
   SESSION_MAX_AGE,
-  authEnabled,
+  authConfigurationError,
 } from "@/lib/auth";
 
 export type LoginResult = { ok: boolean; message?: string; role?: string };
 
 export async function loginAction(password: string): Promise<LoginResult> {
-  if (!authEnabled()) {
-    return { ok: true, role: "ADMIN" }; // sin protección configurada
+  const configurationError = authConfigurationError();
+  if (configurationError) {
+    return {
+      ok: false,
+      message: "El acceso administrativo no está configurado correctamente. Contactá al responsable del sistema.",
+    };
   }
+
   const role = verifyPassword(password);
   if (!role) return { ok: false, message: "Contraseña incorrecta." };
 
-  const token = await createSessionToken(role);
+  const installerId =
+    role === "INSTALLER" ? process.env.AUTH_INSTALLER_ID : undefined;
+  if (role === "INSTALLER" && !installerId) {
+    return {
+      ok: false,
+      message: "El acceso de instalador todavía no está habilitado para una cuenta individual.",
+    };
+  }
+
+  const token = await createSessionToken(role, installerId);
   const store = await cookies();
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
+  authConfigurationError,
   authEnabled,
   verifySessionToken,
   SESSION_COOKIE,
@@ -7,16 +8,18 @@ import {
 } from "@/lib/auth";
 
 /**
- * Protege /admin y /installer. Si no hay contraseñas configuradas por entorno,
- * la protección se desactiva (modo dev/demo abierto).
+ * El middleware protege las rutas; las Server Actions repiten la autorización
+ * en el servidor porque no deben depender de que la UI esté protegida.
  */
 export async function middleware(req: NextRequest) {
-  if (!authEnabled()) return NextResponse.next();
-
   const { pathname } = req.nextUrl;
   const isAdmin = pathname.startsWith("/admin");
   const isInstaller = pathname.startsWith("/installer");
   if (!isAdmin && !isInstaller) return NextResponse.next();
+
+  if (!authEnabled() && process.env.NODE_ENV !== "production") {
+    return NextResponse.next();
+  }
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = await verifySessionToken(token);
@@ -24,10 +27,13 @@ export async function middleware(req: NextRequest) {
   const allowed = (role: Role) =>
     isAdmin ? role === "ADMIN" : role === "ADMIN" || role === "INSTALLER";
 
-  if (session && allowed(session.role)) return NextResponse.next();
+  if (!authConfigurationError() && session && allowed(session.role)) {
+    return NextResponse.next();
+  }
 
   const loginUrl = new URL("/login", req.url);
   loginUrl.searchParams.set("next", pathname);
+  if (authConfigurationError()) loginUrl.searchParams.set("setup", "required");
   return NextResponse.redirect(loginUrl);
 }
 

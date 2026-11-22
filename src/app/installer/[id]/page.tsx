@@ -4,6 +4,7 @@ import { getWorkOrder } from "@/data/operations";
 import { hasDatabase } from "@/lib/prisma";
 import { StatusBadge } from "@/components/admin/ui";
 import { InstallerJob } from "@/features/workorders/InstallerJob";
+import { getAuthenticatedSession } from "@/lib/server-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,14 @@ export default async function InstallerJobPage({
     );
   }
 
-  const order = await getWorkOrder(id);
+  const [order, session] = await Promise.all([
+    getWorkOrder(id),
+    getAuthenticatedSession(),
+  ]);
   if (!order) notFound();
+  if (session?.role === "INSTALLER" && order.installerId !== session.installerId) {
+    notFound();
+  }
 
   return (
     <div>
