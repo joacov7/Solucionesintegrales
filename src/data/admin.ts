@@ -5,6 +5,7 @@
  */
 
 import { prisma, hasDatabase } from "@/lib/prisma";
+import { safeDbRead } from "@/lib/db-safe";
 import type {
   QuoteStatus,
   WorkOrderStatus,
@@ -35,67 +36,76 @@ export type DashboardStats = {
   products: number;
   leadsNew: number;
   demo: boolean;
+  /** true si hay DB configurada pero la lectura falló (ej: sin tablas / sin seed). */
+  dbError: boolean;
+};
+
+const EMPTY_STATS: Omit<DashboardStats, "demo" | "dbError"> = {
+  monthlySales: 0,
+  quotesSent: 0,
+  quotesAccepted: 0,
+  installationsPending: 0,
+  installationsDone: 0,
+  estimatedMargin: 0,
+  customers: 0,
+  products: 0,
+  leadsNew: 0,
 };
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   if (!hasDatabase()) {
-    return {
-      monthlySales: 0,
-      quotesSent: 0,
-      quotesAccepted: 0,
-      installationsPending: 0,
-      installationsDone: 0,
-      estimatedMargin: 0,
-      customers: 0,
-      products: 0,
-      leadsNew: 0,
-      demo: true,
-    };
+    return { ...EMPTY_STATS, demo: true, dbError: false };
   }
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [
-    accepted,
-    quotesSent,
-    quotesAccepted,
-    pending,
-    done,
-    customers,
-    products,
-    leadsNew,
-  ] = await Promise.all([
-    prisma.quote.findMany({
-      where: { status: "ACEPTADO", updatedAt: { gte: startOfMonth } },
-      select: { saleTotal: true, profit: true },
-    }),
-    prisma.quote.count({ where: { status: "ENVIADO" } }),
-    prisma.quote.count({ where: { status: "ACEPTADO" } }),
-    prisma.workOrder.count({
-      where: { status: { notIn: ["FINALIZADA", "CANCELADA"] } },
-    }),
-    prisma.workOrder.count({ where: { status: "FINALIZADA" } }),
-    prisma.customer.count(),
-    prisma.product.count(),
-    prisma.lead.count({ where: { status: "NUEVO" } }),
-  ]);
+  try {
+    const [
+      accepted,
+      quotesSent,
+      quotesAccepted,
+      pending,
+      done,
+      customers,
+      products,
+      leadsNew,
+    ] = await Promise.all([
+      prisma.quote.findMany({
+        where: { status: "ACEPTADO", updatedAt: { gte: startOfMonth } },
+        select: { saleTotal: true, profit: true },
+      }),
+      prisma.quote.count({ where: { status: "ENVIADO" } }),
+      prisma.quote.count({ where: { status: "ACEPTADO" } }),
+      prisma.workOrder.count({
+        where: { status: { notIn: ["FINALIZADA", "CANCELADA"] } },
+      }),
+      prisma.workOrder.count({ where: { status: "FINALIZADA" } }),
+      prisma.customer.count(),
+      prisma.product.count(),
+      prisma.lead.count({ where: { status: "NUEVO" } }),
+    ]);
 
-  const monthlySales = accepted.reduce((a, q) => a + Number(q.saleTotal), 0);
-  const estimatedMargin = accepted.reduce((a, q) => a + Number(q.profit), 0);
+    const monthlySales = accepted.reduce((a, q) => a + Number(q.saleTotal), 0);
+    const estimatedMargin = accepted.reduce((a, q) => a + Number(q.profit), 0);
 
-  return {
-    monthlySales,
-    quotesSent,
-    quotesAccepted,
-    installationsPending: pending,
-    installationsDone: done,
-    estimatedMargin,
-    customers,
-    products,
-    leadsNew,
-    demo: false,
-  };
+    return {
+      monthlySales,
+      quotesSent,
+      quotesAccepted,
+      installationsPending: pending,
+      installationsDone: done,
+      estimatedMargin,
+      customers,
+      products,
+      leadsNew,
+      demo: false,
+      dbError: false,
+    };
+  } catch (error) {
+    console.error("[db-safe] getDashboardStats falló; ¿falta correr el seed?", error);
+    return { ...EMPTY_STATS, demo: false, dbError: true };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -199,19 +209,25 @@ export type AdminCustomer = {
 
 export async function listCustomers(): Promise<AdminCustomer[]> {
   if (!hasDatabase()) return [];
-  const rows = await prisma.customer.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
-  return rows.map((c) => ({
-    id: c.id,
-    name: c.name,
-    phone: c.phone,
-    email: c.email,
-    locality: c.locality,
-    type: c.type,
-    createdAt: c.createdAt,
-  }));
+  return safeDbRead(
+    async () => {
+      const rows = await prisma.customer.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      });
+      return rows.map((c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        locality: c.locality,
+        type: c.type,
+        createdAt: c.createdAt,
+      }));
+    },
+    [],
+    "listCustomers"
+  );
 }
 
 export async function createCustomer(data: {
@@ -253,21 +269,27 @@ export type AdminLead = {
 
 export async function listLeads(): Promise<AdminLead[]> {
   if (!hasDatabase()) return [];
-  const rows = await prisma.lead.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
-  return rows.map((l) => ({
-    id: l.id,
-    name: l.name,
-    phone: l.phone,
-    service: l.service,
-    locality: l.locality,
-    estimatedArs: l.estimatedArs ? Number(l.estimatedArs) : null,
-    source: l.source,
-    status: l.status,
-    createdAt: l.createdAt,
-  }));
+  return safeDbRead(
+    async () => {
+      const rows = await prisma.lead.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      });
+      return rows.map((l) => ({
+        id: l.id,
+        name: l.name,
+        phone: l.phone,
+        service: l.service,
+        locality: l.locality,
+        estimatedArs: l.estimatedArs ? Number(l.estimatedArs) : null,
+        source: l.source,
+        status: l.status,
+        createdAt: l.createdAt,
+      }));
+    },
+    [],
+    "listLeads"
+  );
 }
 
 export async function updateLeadStatus(
@@ -300,18 +322,24 @@ export type AdminQuote = {
 
 export async function listQuotes(): Promise<AdminQuote[]> {
   if (!hasDatabase()) return [];
-  const rows = await prisma.quote.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { customer: true },
-    take: 200,
-  });
-  return rows.map((q) => ({
-    id: q.id,
-    code: q.code,
-    customerName: q.customer?.name ?? null,
-    status: q.status,
-    saleTotal: Number(q.saleTotal),
-    marginPct: Number(q.marginPct),
-    createdAt: q.createdAt,
-  }));
+  return safeDbRead(
+    async () => {
+      const rows = await prisma.quote.findMany({
+        orderBy: { createdAt: "desc" },
+        include: { customer: true },
+        take: 200,
+      });
+      return rows.map((q) => ({
+        id: q.id,
+        code: q.code,
+        customerName: q.customer?.name ?? null,
+        status: q.status,
+        saleTotal: Number(q.saleTotal),
+        marginPct: Number(q.marginPct),
+        createdAt: q.createdAt,
+      }));
+    },
+    [],
+    "listQuotes"
+  );
 }

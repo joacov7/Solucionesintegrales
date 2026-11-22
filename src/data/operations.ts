@@ -5,6 +5,7 @@
  */
 
 import { prisma, hasDatabase } from "@/lib/prisma";
+import { safeDbRead } from "@/lib/db-safe";
 import type {
   QuoteStatus,
   WorkOrderStatus,
@@ -113,15 +114,20 @@ export type QuoteDetail = {
 
 export async function getQuote(id: string): Promise<QuoteDetail | null> {
   if (!hasDatabase()) return null;
-  const q = await prisma.quote.findUnique({
-    where: { id },
-    include: {
-      customer: true,
-      paymentMethod: true,
-      items: true,
-      workOrders: { select: { id: true } },
-    },
-  });
+  const q = await safeDbRead(
+    () =>
+      prisma.quote.findUnique({
+        where: { id },
+        include: {
+          customer: true,
+          paymentMethod: true,
+          items: true,
+          workOrders: { select: { id: true } },
+        },
+      }),
+    null,
+    "getQuote"
+  );
   if (!q) return null;
   return {
     id: q.id,
@@ -226,20 +232,26 @@ export async function listWorkOrders(
   installerId?: string
 ): Promise<WorkOrderListItem[]> {
   if (!hasDatabase()) return [];
-  const rows = await prisma.workOrder.findMany({
-    where: installerId ? { installerId } : {},
-    include: { customer: true, installer: true },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
-  return rows.map((w) => ({
-    id: w.id,
-    code: w.code,
-    status: w.status,
-    customerName: w.customer.name,
-    installerName: w.installer?.name ?? null,
-    scheduledAt: w.scheduledAt,
-  }));
+  return safeDbRead(
+    async () => {
+      const rows = await prisma.workOrder.findMany({
+        where: installerId ? { installerId } : {},
+        include: { customer: true, installer: true },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      });
+      return rows.map((w) => ({
+        id: w.id,
+        code: w.code,
+        status: w.status,
+        customerName: w.customer.name,
+        installerName: w.installer?.name ?? null,
+        scheduledAt: w.scheduledAt,
+      }));
+    },
+    [],
+    "listWorkOrders"
+  );
 }
 
 export type WorkOrderDetail = {
@@ -268,15 +280,20 @@ export type WorkOrderDetail = {
 
 export async function getWorkOrder(id: string): Promise<WorkOrderDetail | null> {
   if (!hasDatabase()) return null;
-  const w = await prisma.workOrder.findUnique({
-    where: { id },
-    include: {
-      customer: true,
-      items: true,
-      checklist: { orderBy: { order: "asc" } },
-      installation: true,
-    },
-  });
+  const w = await safeDbRead(
+    () =>
+      prisma.workOrder.findUnique({
+        where: { id },
+        include: {
+          customer: true,
+          items: true,
+          checklist: { orderBy: { order: "asc" } },
+          installation: true,
+        },
+      }),
+    null,
+    "getWorkOrder"
+  );
   if (!w) return null;
   return {
     id: w.id,
@@ -456,23 +473,29 @@ export type InstallationRow = {
 
 export async function listInstallations(): Promise<InstallationRow[]> {
   if (!hasDatabase()) return [];
-  const rows = await prisma.installation.findMany({
-    include: { customer: true, installer: true, warranties: true },
-    orderBy: { installedAt: "desc" },
-    take: 200,
-  });
-  return rows.map((i) => ({
-    id: i.id,
-    customerName: i.customer.name,
-    installerName: i.installer?.name ?? null,
-    installedAt: i.installedAt,
-    clientSignedOff: i.clientSignedOff,
-    warranties: i.warranties.map((w) => ({
-      productName: w.productName,
-      serialNumber: w.serialNumber,
-      warrantyMonths: w.warrantyMonths,
-    })),
-  }));
+  return safeDbRead(
+    async () => {
+      const rows = await prisma.installation.findMany({
+        include: { customer: true, installer: true, warranties: true },
+        orderBy: { installedAt: "desc" },
+        take: 200,
+      });
+      return rows.map((i) => ({
+        id: i.id,
+        customerName: i.customer.name,
+        installerName: i.installer?.name ?? null,
+        installedAt: i.installedAt,
+        clientSignedOff: i.clientSignedOff,
+        warranties: i.warranties.map((w) => ({
+          productName: w.productName,
+          serialNumber: w.serialNumber,
+          warrantyMonths: w.warrantyMonths,
+        })),
+      }));
+    },
+    [],
+    "listInstallations"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -489,17 +512,23 @@ export type InstallerRow = {
 
 export async function listInstallers(activeOnly = false): Promise<InstallerRow[]> {
   if (!hasDatabase()) return [];
-  const rows = await prisma.installer.findMany({
-    where: activeOnly ? { active: true } : {},
-    orderBy: { name: "asc" },
-  });
-  return rows.map((i) => ({
-    id: i.id,
-    name: i.name,
-    phone: i.phone,
-    email: i.email,
-    active: i.active,
-  }));
+  return safeDbRead(
+    async () => {
+      const rows = await prisma.installer.findMany({
+        where: activeOnly ? { active: true } : {},
+        orderBy: { name: "asc" },
+      });
+      return rows.map((i) => ({
+        id: i.id,
+        name: i.name,
+        phone: i.phone,
+        email: i.email,
+        active: i.active,
+      }));
+    },
+    [],
+    "listInstallers"
+  );
 }
 
 export async function createInstaller(data: {
@@ -533,35 +562,47 @@ export type MaintenanceRow = {
 
 export async function listMaintenance(): Promise<MaintenanceRow[]> {
   if (!hasDatabase()) return [];
-  const rows = await prisma.maintenance.findMany({
-    include: { installation: { include: { customer: true } } },
-    orderBy: [{ done: "asc" }, { scheduledAt: "asc" }],
-    take: 200,
-  });
-  return rows.map((m) => ({
-    id: m.id,
-    installationId: m.installationId,
-    customerName: m.installation.customer.name,
-    type: m.type,
-    scheduledAt: m.scheduledAt,
-    done: m.done,
-    notes: m.notes,
-  }));
+  return safeDbRead(
+    async () => {
+      const rows = await prisma.maintenance.findMany({
+        include: { installation: { include: { customer: true } } },
+        orderBy: [{ done: "asc" }, { scheduledAt: "asc" }],
+        take: 200,
+      });
+      return rows.map((m) => ({
+        id: m.id,
+        installationId: m.installationId,
+        customerName: m.installation.customer.name,
+        type: m.type,
+        scheduledAt: m.scheduledAt,
+        done: m.done,
+        notes: m.notes,
+      }));
+    },
+    [],
+    "listMaintenance"
+  );
 }
 
 export type InstallationOption = { id: string; label: string };
 
 export async function listInstallationOptions(): Promise<InstallationOption[]> {
   if (!hasDatabase()) return [];
-  const rows = await prisma.installation.findMany({
-    include: { customer: true },
-    orderBy: { installedAt: "desc" },
-    take: 200,
-  });
-  return rows.map((i) => ({
-    id: i.id,
-    label: `${i.customer.name} · ${new Date(i.installedAt).toLocaleDateString("es-AR")}`,
-  }));
+  return safeDbRead(
+    async () => {
+      const rows = await prisma.installation.findMany({
+        include: { customer: true },
+        orderBy: { installedAt: "desc" },
+        take: 200,
+      });
+      return rows.map((i) => ({
+        id: i.id,
+        label: `${i.customer.name} · ${new Date(i.installedAt).toLocaleDateString("es-AR")}`,
+      }));
+    },
+    [],
+    "listInstallationOptions"
+  );
 }
 
 export async function createMaintenance(data: {
