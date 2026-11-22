@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { siteConfig, brandCssVars } from "@/config/site";
+import { Toaster } from "@/components/ui/toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -43,7 +44,10 @@ export default function RootLayout({
   const style = brandCssVars() as React.CSSProperties;
   return (
     <html lang="es" style={style}>
-      <body className="min-h-dvh font-sans antialiased">{children}</body>
+      <body className="min-h-dvh font-sans antialiased">
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }

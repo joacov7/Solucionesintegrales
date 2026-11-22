@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -18,48 +19,56 @@ export function Container({
 }
 
 // --- Button ----------------------------------------------------------------
-type ButtonVariant = "primary" | "accent" | "outline" | "ghost" | "whatsapp";
-type ButtonSize = "sm" | "md" | "lg";
+export const buttonVariants = cva(
+  "focus-ring inline-flex select-none items-center justify-center gap-2 rounded-xl font-medium transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        primary: "bg-brand text-brand-fg shadow-xs hover:bg-brand/90",
+        accent: "bg-accent text-accent-fg shadow-xs hover:bg-accent/90",
+        outline: "border border-line bg-surface text-ink hover:bg-surface-2",
+        ghost: "text-ink hover:bg-brand-soft",
+        subtle: "bg-brand-soft text-ink hover:bg-line/70",
+        danger: "bg-danger text-white shadow-xs hover:bg-danger/90",
+        whatsapp: "bg-[#25D366] text-white shadow-xs hover:bg-[#1ebe5a]",
+      },
+      size: {
+        sm: "h-9 px-3 text-sm",
+        md: "h-11 px-5 text-sm",
+        lg: "h-12 px-6 text-base",
+        icon: "h-10 w-10",
+      },
+    },
+    defaultVariants: { variant: "primary", size: "md" },
+  }
+);
 
-const buttonBase =
-  "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:opacity-50 disabled:pointer-events-none";
-
-const buttonVariants: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-brand-fg hover:bg-brand/90",
-  accent: "bg-accent text-accent-fg hover:bg-accent/90",
-  outline: "border border-line bg-surface text-ink hover:bg-brand-soft",
-  ghost: "text-ink hover:bg-brand-soft",
-  whatsapp: "bg-[#25D366] text-white hover:bg-[#1ebe5a]",
-};
-
-const buttonSizes: Record<ButtonSize, string> = {
-  sm: "h-9 px-3 text-sm",
-  md: "h-11 px-5 text-sm",
-  lg: "h-12 px-6 text-base",
-};
-
-type ButtonProps = {
-  variant?: ButtonVariant;
-  size?: ButtonSize;
+type ButtonProps = VariantProps<typeof buttonVariants> & {
+  loading?: boolean;
 } & ComponentProps<"button">;
 
 export function Button({
-  variant = "primary",
-  size = "md",
+  variant,
+  size,
   className,
+  loading,
+  disabled,
+  children,
   ...props
 }: ButtonProps) {
   return (
     <button
-      className={cn(buttonBase, buttonVariants[variant], buttonSizes[size], className)}
+      className={cn(buttonVariants({ variant, size }), className)}
+      disabled={disabled || loading}
       {...props}
-    />
+    >
+      {loading && <Spinner className="h-4 w-4" />}
+      {children}
+    </button>
   );
 }
 
-type LinkButtonProps = {
-  variant?: ButtonVariant;
-  size?: ButtonSize;
+type LinkButtonProps = VariantProps<typeof buttonVariants> & {
   href: string;
   external?: boolean;
   className?: string;
@@ -67,14 +76,14 @@ type LinkButtonProps = {
 };
 
 export function LinkButton({
-  variant = "primary",
-  size = "md",
+  variant,
+  size,
   href,
   external,
   className,
   children,
 }: LinkButtonProps) {
-  const cls = cn(buttonBase, buttonVariants[variant], buttonSizes[size], className);
+  const cls = cn(buttonVariants({ variant, size }), className);
   if (external) {
     return (
       <a href={href} target="_blank" rel="noopener noreferrer" className={cls}>
@@ -92,15 +101,18 @@ export function LinkButton({
 // --- Card ------------------------------------------------------------------
 export function Card({
   className,
+  interactive,
   children,
 }: {
   className?: string;
+  interactive?: boolean;
   children: ReactNode;
 }) {
   return (
     <div
       className={cn(
         "rounded-2xl border border-line bg-surface p-6 shadow-card",
+        interactive && "transition-all hover:-translate-y-0.5 hover:shadow-pop",
         className
       )}
     >
@@ -110,23 +122,32 @@ export function Card({
 }
 
 // --- Badge -----------------------------------------------------------------
+const badgeVariants = cva(
+  "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium",
+  {
+    variants: {
+      tone: {
+        neutral: "bg-brand-soft text-ink",
+        accent: "bg-accent/10 text-accent",
+        success: "bg-success-soft text-success",
+        warning: "bg-warning-soft text-warning",
+        danger: "bg-danger-soft text-danger",
+        outline: "border border-line text-muted",
+      },
+    },
+    defaultVariants: { tone: "neutral" },
+  }
+);
+
 export function Badge({
   className,
+  tone,
   children,
-}: {
+}: VariantProps<typeof badgeVariants> & {
   className?: string;
   children: ReactNode;
 }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-ink",
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
+  return <span className={cn(badgeVariants({ tone }), className)}>{children}</span>;
 }
 
 // --- Section heading -------------------------------------------------------
@@ -153,5 +174,113 @@ export function SectionHeading({
       </h2>
       {subtitle && <p className="mt-3 text-muted">{subtitle}</p>}
     </div>
+  );
+}
+
+// --- Form primitives -------------------------------------------------------
+export function Label({
+  className,
+  children,
+  ...props
+}: ComponentProps<"label">) {
+  return (
+    <label
+      className={cn("mb-1.5 block text-sm font-medium text-ink", className)}
+      {...props}
+    >
+      {children}
+    </label>
+  );
+}
+
+const fieldStyles =
+  "focus-ring h-11 w-full rounded-xl border border-line bg-surface px-3 text-sm text-ink placeholder:text-muted/70 transition-colors disabled:cursor-not-allowed disabled:bg-surface-2";
+
+export function Input({ className, ...props }: ComponentProps<"input">) {
+  return <input className={cn(fieldStyles, className)} {...props} />;
+}
+
+export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
+  return (
+    <textarea className={cn(fieldStyles, "h-auto py-2.5", className)} {...props} />
+  );
+}
+
+export function Select({ className, children, ...props }: ComponentProps<"select">) {
+  return (
+    <select className={cn(fieldStyles, "pr-8", className)} {...props}>
+      {children}
+    </select>
+  );
+}
+
+/** Campo con etiqueta, ayuda y mensaje de error opcionales. */
+export function Field({
+  label,
+  hint,
+  error,
+  htmlFor,
+  children,
+}: {
+  label?: string;
+  hint?: string;
+  error?: string;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      {label && <Label htmlFor={htmlFor}>{label}</Label>}
+      {children}
+      {error ? (
+        <p className="mt-1 text-xs text-danger">{error}</p>
+      ) : hint ? (
+        <p className="mt-1 text-xs text-muted">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+// --- Misc primitives -------------------------------------------------------
+export function Skeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-lg bg-brand-soft",
+        "after:absolute after:inset-0 after:-translate-x-full after:animate-shimmer",
+        "after:bg-gradient-to-r after:from-transparent after:via-white/60 after:to-transparent",
+        className
+      )}
+    />
+  );
+}
+
+export function Separator({ className }: { className?: string }) {
+  return <div className={cn("h-px w-full bg-line", className)} />;
+}
+
+export function Spinner({ className }: { className?: string }) {
+  return (
+    <svg
+      className={cn("h-5 w-5 animate-spin", className)}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path
+        className="opacity-90"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+      />
+    </svg>
+  );
+}
+
+export function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-line bg-surface-2 px-1.5 font-sans text-[11px] font-medium text-muted">
+      {children}
+    </kbd>
   );
 }
