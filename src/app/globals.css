@@ -16,7 +16,15 @@
   --ink: 15 23 42;
   --muted: 100 116 139;
   --surface: 255 255 255;
+  --surface-2: 248 250 252;
   --line: 226 232 240;
+  --ring: 37 99 235;
+  --success: 16 185 129;
+  --success-soft: 209 250 229;
+  --warning: 217 119 6;
+  --warning-soft: 254 243 199;
+  --danger: 225 29 72;
+  --danger-soft: 255 228 230;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, Helvetica, Arial, sans-serif;
 }
@@ -43,4 +51,33 @@ body {
     radial-gradient(60% 60% at 80% 0%, rgb(var(--accent) / 0.12), transparent 60%),
     radial-gradient(50% 50% at 0% 20%, rgb(var(--brand) / 0.06), transparent 60%),
     rgb(var(--surface));
+}
+
+/* Patrón de grilla sutil para fondos tecnológicos */
+.bg-grid {
+  background-image:
+    linear-gradient(rgb(var(--line) / 0.6) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--line) / 0.6) 1px, transparent 1px);
+  background-size: 40px 40px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 100%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 100%);
+}
+
+/* Anillo de foco accesible y consistente */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 2px rgb(var(--surface)), 0 0 0 4px rgb(var(--ring) / 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
