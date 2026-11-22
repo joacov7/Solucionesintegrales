@@ -16,6 +16,15 @@ export default async function AdminDashboardPage() {
       />
 
       {s.demo && <DemoBanner />}
+      {s.dbError && (
+        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Base de datos sin inicializar.</strong> Hay conexión a la base,
+          pero faltan las tablas o los datos. Corré las migraciones y el seed
+          (<code>db:push</code> + <code>db:seed</code>, o el workflow «DB setup
+          (Neon)» en Actions) para ver información real. Mientras tanto, el panel
+          se muestra vacío en lugar de fallar.
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Ventas del mes" value={formatArs(s.monthlySales)} />
