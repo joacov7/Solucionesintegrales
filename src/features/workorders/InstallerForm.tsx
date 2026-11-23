@@ -2,60 +2,44 @@
 
 import { useState } from "react";
 import { createInstallerAction } from "@/app/actions/operations";
-import { AdminCard } from "@/components/admin/ui";
+import { Button, Field, Input } from "@/components/ui";
+import { toast } from "@/components/ui/toast";
 
-export function InstallerForm() {
+export function InstallerForm({ onSuccess }: { onSuccess?: () => void }) {
   const [f, setF] = useState({ name: "", phone: "", email: "" });
-  const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function save() {
     if (!f.name.trim()) {
-      setMsg("El nombre es obligatorio.");
+      toast.error("El nombre es obligatorio.");
       return;
     }
     setSaving(true);
-    setMsg(null);
     const res = await createInstallerAction(f);
-    setMsg(res.message);
-    if (res.ok) setF({ name: "", phone: "", email: "" });
     setSaving(false);
+    if (res.ok) {
+      toast.success(res.message);
+      setF({ name: "", phone: "", email: "" });
+      onSuccess?.();
+    } else {
+      toast.error(res.message);
+    }
   }
 
-  const input =
-    "h-11 w-full rounded-xl border border-line px-3 text-sm focus:border-accent focus:outline-none";
-
   return (
-    <AdminCard>
-      <h2 className="text-sm font-semibold text-ink">Nuevo instalador</h2>
-      <div className="mt-3 space-y-2">
-        <input
-          placeholder="Nombre *"
-          value={f.name}
-          onChange={(e) => setF({ ...f, name: e.target.value })}
-          className={input}
-        />
-        <input
-          placeholder="Teléfono"
-          value={f.phone}
-          onChange={(e) => setF({ ...f, phone: e.target.value })}
-          className={input}
-        />
-        <input
-          placeholder="Email"
-          value={f.email}
-          onChange={(e) => setF({ ...f, email: e.target.value })}
-          className={input}
-        />
-      </div>
-      <button
-        onClick={save}
-        disabled={saving}
-        className="mt-4 w-full rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-brand-fg hover:bg-brand/90 disabled:opacity-50"
-      >
-        {saving ? "Guardando…" : "Crear instalador"}
-      </button>
-      {msg && <p className="mt-2 text-center text-xs text-accent">{msg}</p>}
-    </AdminCard>
+    <div className="space-y-4">
+      <Field label="Nombre *">
+        <Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Nombre y apellido" />
+      </Field>
+      <Field label="Teléfono">
+        <Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
+      </Field>
+      <Field label="Email">
+        <Input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
+      </Field>
+      <Button className="w-full" onClick={save} loading={saving}>
+        Crear instalador
+      </Button>
+    </div>
   );
 }
