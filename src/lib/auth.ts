@@ -8,6 +8,8 @@ export type SessionPayload = {
   role: Role;
   exp: number;
   installerId?: string;
+  // Empresa activa (multi-tenant). Opcional: si no está, se usa la por defecto.
+  tenantId?: string;
 };
 
 export const SESSION_COOKIE = "si_session";

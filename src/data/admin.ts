@@ -6,6 +6,7 @@
 
 import { prisma, hasDatabase } from "@/lib/prisma";
 import { safeDbRead } from "@/lib/db-safe";
+import { getActiveTenantId } from "@/lib/tenant";
 import type {
   QuoteStatus,
   WorkOrderStatus,
@@ -116,13 +117,20 @@ export async function updateSettings(
   entries: { key: string; value: string }[]
 ): Promise<WriteResult> {
   if (!hasDatabase()) return DEMO;
+  const tenantId = await getActiveTenantId();
+  if (!tenantId) {
+    return {
+      ok: false,
+      message: "La empresa no está inicializada. Corré el seed de la base.",
+    };
+  }
   try {
     await prisma.$transaction(
       entries.map((e) =>
         prisma.setting.upsert({
-          where: { key: e.key },
+          where: { tenantId_key: { tenantId, key: e.key } },
           update: { value: e.value },
-          create: { key: e.key, value: e.value },
+          create: { key: e.key, value: e.value, tenantId },
         })
       )
     );

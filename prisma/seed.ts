@@ -1,6 +1,7 @@
 /**
- * Seed de la base de datos con los datos iniciales (categorías, productos Vetti
- * de la lista, servicios, métodos de pago, paquetes y configuración).
+ * Seed de la base de datos con los datos iniciales (empresa por defecto,
+ * categorías, productos Vetti de la lista, servicios, métodos de pago,
+ * paquetes, configuración y un usuario administrador).
  * Ejecutar con: npm run db:seed
  */
 
@@ -17,13 +18,32 @@ import {
 
 const prisma = new PrismaClient();
 
+const TENANT_SLUG = "default";
+const TENANT_NAME = "Servicios Integrales";
+const ADMIN_EMAIL = "admin@serviciosintegrales.local";
+
 async function main() {
+  console.log("→ Seed: empresa (tenant) por defecto");
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: TENANT_SLUG },
+    update: { name: TENANT_NAME },
+    create: { slug: TENANT_SLUG, name: TENANT_NAME },
+  });
+  const tenantId = tenant.id;
+
+  console.log("→ Seed: usuario administrador");
+  await prisma.user.upsert({
+    where: { email: ADMIN_EMAIL },
+    update: { role: "ADMIN", tenantId },
+    create: { email: ADMIN_EMAIL, name: "Administrador", role: "ADMIN", tenantId },
+  });
+
   console.log("→ Seed: settings");
   for (const s of initialSettings) {
     await prisma.setting.upsert({
-      where: { key: s.key },
+      where: { tenantId_key: { tenantId, key: s.key } },
       update: { value: s.value, label: s.label },
-      create: s,
+      create: { ...s, tenantId },
     });
   }
 
@@ -31,8 +51,8 @@ async function main() {
   for (const c of initialCategories) {
     await prisma.productCategory.upsert({
       where: { slug: c.slug },
-      update: { name: c.name, order: c.order },
-      create: c,
+      update: { name: c.name, order: c.order, tenantId },
+      create: { ...c, tenantId },
     });
   }
   const categories = await prisma.productCategory.findMany();
@@ -42,31 +62,22 @@ async function main() {
   for (const p of initialProducts) {
     const categoryId = catBySlug.get(p.categorySlug);
     if (!categoryId) continue;
+    const data = {
+      name: p.name,
+      brand: p.brand,
+      model: p.model,
+      priceUsd: p.priceUsd,
+      hasVat: p.hasVat,
+      marginPct: DEFAULT_MARGIN_PCT,
+      installMinutes: p.installMinutes,
+      description: p.description,
+      categoryId,
+      tenantId,
+    };
     await prisma.product.upsert({
       where: { sku: p.sku },
-      update: {
-        name: p.name,
-        brand: p.brand,
-        model: p.model,
-        priceUsd: p.priceUsd,
-        hasVat: p.hasVat,
-        marginPct: DEFAULT_MARGIN_PCT,
-        installMinutes: p.installMinutes,
-        description: p.description,
-        categoryId,
-      },
-      create: {
-        sku: p.sku,
-        name: p.name,
-        brand: p.brand,
-        model: p.model,
-        priceUsd: p.priceUsd,
-        hasVat: p.hasVat,
-        marginPct: DEFAULT_MARGIN_PCT,
-        installMinutes: p.installMinutes,
-        description: p.description,
-        categoryId,
-      },
+      update: data,
+      create: { sku: p.sku, ...data },
     });
   }
 
@@ -74,16 +85,16 @@ async function main() {
   for (const s of initialServices) {
     await prisma.service.upsert({
       where: { slug: s.slug },
-      update: { name: s.name, priceArs: s.priceArs, estimatedMin: s.estimatedMin },
-      create: s,
+      update: { name: s.name, priceArs: s.priceArs, estimatedMin: s.estimatedMin, tenantId },
+      create: { ...s, tenantId },
     });
   }
 
   console.log("→ Seed: métodos de pago");
-  const existingMethods = await prisma.paymentMethod.count();
+  const existingMethods = await prisma.paymentMethod.count({ where: { tenantId } });
   if (existingMethods === 0) {
     for (const m of initialPaymentMethods) {
-      await prisma.paymentMethod.create({ data: m });
+      await prisma.paymentMethod.create({ data: { ...m, tenantId } });
     }
   }
 
@@ -93,16 +104,13 @@ async function main() {
   for (const pkg of initialPackages) {
     const created = await prisma.package.upsert({
       where: { slug: pkg.slug },
-      update: {
-        name: pkg.name,
-        target: pkg.target,
-        description: pkg.description,
-      },
+      update: { name: pkg.name, target: pkg.target, description: pkg.description, tenantId },
       create: {
         name: pkg.name,
         slug: pkg.slug,
         target: pkg.target,
         description: pkg.description,
+        tenantId,
       },
     });
     // Reemplazar items del paquete.
