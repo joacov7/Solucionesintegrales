@@ -7,6 +7,7 @@ import { siteConfig } from "@/config/site";
 import { Icon } from "@/components/ui/Icon";
 import { cn } from "@/lib/utils";
 import { LogoutButton } from "@/features/auth/LogoutButton";
+import { CommandMenu } from "@/components/admin/CommandMenu";
 
 const NAV = [
   { href: "/admin", label: "Dashboard", exact: true },
@@ -57,6 +58,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div className="hidden border-b border-line p-5 lg:block">
             <div className="text-sm font-semibold text-ink">{siteConfig.name}</div>
             <div className="text-xs text-muted">Panel administrativo</div>
+          </div>
+          <div className="p-3 pb-0">
+            <CommandMenu />
           </div>
           <nav className="grid gap-1 p-3">
             {NAV.map((item) => (
