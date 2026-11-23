@@ -27,6 +27,7 @@ datasource db {
 
 enum UserRole {
   ADMIN
+  MANAGER
   SELLER
   INSTALLER
   CUSTOMER
@@ -74,17 +75,52 @@ enum MaintenanceType {
 }
 
 // ---------------------------------------------------------------------------
-// Configuración global (tipo de cambio, IVA, márgenes por defecto, etc.)
+// Multi-tenant (empresas). Cada empresa aísla sus datos; preparado para RLS.
+// `tenantId` es nullable por ahora para una migración segura y un tenant por
+// defecto. El scoping de consultas se aplica en la capa de datos.
+// ---------------------------------------------------------------------------
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users          User[]
+  settings       Setting[]
+  customers      Customer[]
+  categories     ProductCategory[]
+  products       Product[]
+  services       Service[]
+  packages       Package[]
+  paymentMethods PaymentMethod[]
+  quotes         Quote[]
+  installers     Installer[]
+  workOrders     WorkOrder[]
+  installations  Installation[]
+  maintenance    Maintenance[]
+  leads          Lead[]
+
+  @@map("tenants")
+}
+
+// ---------------------------------------------------------------------------
+// Configuración por empresa (tipo de cambio, IVA, márgenes por defecto, etc.)
 // Clave/valor para poder agregar parámetros sin migraciones.
 // ---------------------------------------------------------------------------
 
 model Setting {
   id        String   @id @default(cuid())
-  key       String   @unique
+  key       String
   value     String
   label     String?
   updatedAt DateTime @updatedAt
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, key])
   @@map("settings")
 }
 
@@ -93,15 +129,24 @@ model Setting {
 // ---------------------------------------------------------------------------
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      UserRole @default(SELLER)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  role         UserRole @default(SELLER)
+  // Hash de contraseña (bcrypt) para auth con base de datos (reemplaza el
+  // acceso interino por contraseña de entorno).
+  passwordHash String?
+  // Si el usuario es INSTALLER, vínculo con su registro de instalador.
+  installerId  String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
 
   quotes Quote[]
 
+  @@index([tenantId])
   @@map("users")
 }
 
@@ -123,10 +168,14 @@ model Customer {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   quotes        Quote[]
   workOrders    WorkOrder[]
   installations Installation[]
 
+  @@index([tenantId])
   @@map("customers")
 }
 
@@ -141,6 +190,10 @@ model ProductCategory {
   order    Int       @default(0)
   products Product[]
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
   @@map("product_categories")
 }
 
@@ -168,11 +221,15 @@ model Product {
   categoryId String
   category   ProductCategory @relation(fields: [categoryId], references: [id])
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   packageItems   PackageItem[]
   quoteItems     QuoteItem[]
   workOrderItems WorkOrderItem[]
 
   @@index([categoryId])
+  @@index([tenantId])
   @@map("products")
 }
 
@@ -188,8 +245,12 @@ model Service {
   estimatedMin   Int     @default(0)
   active         Boolean @default(true)
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   quoteItems QuoteItem[]
 
+  @@index([tenantId])
   @@map("services")
 }
 
@@ -205,8 +266,12 @@ model Package {
   target      String? // Casa, Comercio, Departamento, etc.
   active      Boolean @default(true)
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   items PackageItem[]
 
+  @@index([tenantId])
   @@map("packages")
 }
 
@@ -238,8 +303,12 @@ model PaymentMethod {
   active         Boolean @default(true)
   order          Int     @default(0)
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   quotes Quote[]
 
+  @@index([tenantId])
   @@map("payment_methods")
 }
 
@@ -274,11 +343,15 @@ model Quote {
   updatedAt DateTime @updatedAt
   expiresAt DateTime?
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   items      QuoteItem[]
   workOrders WorkOrder[]
 
   @@index([status])
   @@index([customerId])
+  @@index([tenantId])
   @@map("quotes")
 }
 
@@ -315,9 +388,13 @@ model Installer {
   email    String?
   active   Boolean @default(true)
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   workOrders    WorkOrder[]
   installations Installation[]
 
+  @@index([tenantId])
   @@map("installers")
 }
 
@@ -345,11 +422,15 @@ model WorkOrder {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   items         WorkOrderItem[]
   checklist     InstallationChecklistItem[]
   installation  Installation?
 
   @@index([status])
+  @@index([tenantId])
   @@map("work_orders")
 }
 
@@ -400,9 +481,13 @@ model Installation {
   customer  Customer   @relation(fields: [customerId], references: [id])
   installer Installer? @relation(fields: [installerId], references: [id])
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   warranties  Warranty[]
   maintenance Maintenance[]
 
+  @@index([tenantId])
   @@map("installations")
 }
 
@@ -427,8 +512,12 @@ model Maintenance {
   done           Boolean         @default(false)
   notes          String?
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   installation Installation @relation(fields: [installationId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@map("maintenance")
 }
 
@@ -450,7 +539,11 @@ model Lead {
   notes         String?
   createdAt     DateTime   @default(now())
 
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
   @@index([status])
   @@index([source])
+  @@index([tenantId])
   @@map("leads")
 }
